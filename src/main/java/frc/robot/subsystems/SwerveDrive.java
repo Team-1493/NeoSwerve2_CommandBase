@@ -38,7 +38,8 @@ public static SwerveDriveKinematics m_kinematics = new SwerveDriveKinematics(
   public PIDController rotatePID;
   private double kProtate=2,kDrotate=1;
   private double[] encPositionRad = new double[4];   // encoder position of swerve motors
-  private String[] moduleNames={"FR","FL","BR","BL"};
+// swapped BR and FL
+  private String[] moduleNames={"BR","BL","FR","FL"};
   double headingSet=0;
   boolean rotatePIDon=false;
  
@@ -48,16 +49,11 @@ public static SwerveDriveKinematics m_kinematics = new SwerveDriveKinematics(
     
 
     // Turn Module Offsets in degrees   FR-FL-BR-BL
-    double[] turnMotorZeroPos={4.13, 105.9, 29.9, 56.9};
 
-    modules[0]=new SwerveModule("FR",1,2,11,
-        turnMotorZeroPos[0]);
-    modules[1]=new SwerveModule("FL",3,4,13,
-        turnMotorZeroPos[1]);
-    modules[2]=new SwerveModule("BR",5,6,15,
-        turnMotorZeroPos[2]);
-    modules[3]=new SwerveModule("BL",7,8,17,
-        turnMotorZeroPos[3]);
+    modules[2]=new SwerveModule("FR",1,2);
+    modules[3]=new SwerveModule("FL",3,4);
+    modules[0]=new SwerveModule("BR",5,6);
+    modules[1]=new SwerveModule("BL",7,8);
 
     modulePos=getModulePositions();    
     m_odometry=new SwerveDriveOdometry(m_kinematics,new Rotation2d(heading),modulePos, 
@@ -81,6 +77,7 @@ public static SwerveDriveKinematics m_kinematics = new SwerveDriveKinematics(
     double vx=stickState[0]*maxVelocityMPS;
     double vy=-stickState[1]*maxVelocityMPS;
     double omega=-stickState[2];
+    SmartDashboard.putNumber("initial Omega", omega);
 
   if (Math.abs(omega)<0.001 && (Math.abs(vx)>0.01 || Math.abs(vy)>0.01)){
       if( !rotatePIDon) {
@@ -106,7 +103,8 @@ public void setMotors(double vx,double vy, Rotation2d angle ) {
   headingSet=angle.getRadians();
   rotatePID.setSetpoint(headingSet);
   double pidCalc=rotatePID.calculate(heading);
-  setMotors(vx,vy,pidCalc);
+  setMotors(vx,vy,0);
+//  setMotors(vx,vy,pidCalc);
   SmartDashboard.putNumber("rotatePID calc", pidCalc);
   SmartDashboard.putNumber("heading error", rotatePID.getPositionError());
  
@@ -115,6 +113,7 @@ public void setMotors(double vx,double vy, Rotation2d angle ) {
 // set motors using specified  vx,vy, omega in meters/sec and radians/sec
    public void setMotors(double vx,double vy, double omega ) {
   SmartDashboard.putNumber("headng", heading);
+  SmartDashboard.putNumber("omega", omega);
     ChassisSpeeds speeds = ChassisSpeeds.fromFieldRelativeSpeeds(
     vx, vy, omega,  new Rotation2d(heading));
 // Convert to speeds module states
@@ -133,8 +132,9 @@ public void setModuleStates(SwerveModuleState[] moduleStates){
   while(i<4){
     // get the current turn encoder position in radians
     encPositionRad[i]=modules[i].getAbsAngleRad();
+    double relRad=modules[i].getTurnPosition_Rad();
     // optimize module state to minimize the turn rotation needed
-    moduleStatesOptimized[i]=optimize(moduleStates[i],encPositionRad[i]);
+    moduleStatesOptimized[i]=optimize(moduleStates[i],i);
     // get the drive motor's setpoint in rpm 
     double speedSet=moduleStatesOptimized[i].speedMetersPerSecond;
     // get the turn motor's rotation setpoint radians
@@ -258,13 +258,18 @@ public void resetOdometryToZero(){
   }
 
 
+
+
 // print module values to smartdashboard
 private void printModuleStates(){
 int i=0;
 while(i<4){
 // add whatever values you want to see
   SmartDashboard.putNumber(moduleNames[i]+" Dpos",modules[i].getDrivePosition());            
-  SmartDashboard.putNumber(moduleNames[i]+" Dvel",modules[i].getDriveVelocity()); 
+  SmartDashboard.putNumber(moduleNames[i]+" Dvel",modules[i].getDriveVelocity());
+  SmartDashboard.putNumber(moduleNames[i]+" Tpos",modules[i].getTurnPosition_Rad());
+  SmartDashboard.putNumber(moduleNames[i]+" Tabspos",modules[i].getAbsAngleRad()*180/Math.PI); 
+
   i++;
 }
 SmartDashboard.putNumber("Heading",heading);
@@ -292,27 +297,31 @@ public SwerveModulePosition[] getModulePositions(){
 }
 
 
-static public  SwerveModuleState optimize(SwerveModuleState sms, double currentAngle){
-    double twoPi = 2*Math.PI;
-    double threePiover2 = 3*Math.PI/2;
-    double Piover2=Math.PI/2;
-    double angleTarget=sms.angle.getRadians();
-    double anglediff=angleTarget-currentAngle%twoPi;
-    double angleChange=0;
-    double optimizedAngle;
-    int rev=1;
-    if (anglediff>threePiover2) anglediff=anglediff-twoPi;
-    if (anglediff<-threePiover2) anglediff=anglediff+twoPi;
+public  SwerveModuleState optimize(SwerveModuleState sms, int i){
+  int reverse=1;
+  double turnSet=sms.angle.getDegrees();
+  double optimizedRotation;
+  double initialRot=modules[i].getRelRot();
+  double initialAngle=360*((initialRot/64)%1);  // starting module angle from -180 to 180 
+  if (initialAngle>180) {initialAngle=initialAngle-360;}
+  double delta=(turnSet+modules[i].angleOffsetDeg)-initialAngle;  // get angle difference in degrees
+  if(delta >= 180) {delta = delta-360;}
+  if(delta <= -360) {delta = delta + 360;}
 
-    if (anglediff >Piover2 && anglediff < threePiover2 ) {
-        angleChange=anglediff-Math.PI;
-        rev=-1;}
-    else if (anglediff <-Piover2 && anglediff > -threePiover2 ) {
-        angleChange=anglediff+Math.PI;
-        rev=-1;}    
-    else angleChange=anglediff;    
-    optimizedAngle=angleChange+currentAngle;
-    double speed = sms.speedMetersPerSecond*rev;    
+  if(delta >= 90) {
+      delta = delta-180;
+      reverse=-1;
+  }
+  
+  if(delta <= -90) {
+      delta = delta + 180;
+      reverse=-1;
+  }
+
+  optimizedRotation=initialRot+64*delta/360.;  
+  double optimizedAngle=optimizedRotation*Math.PI*2;
+
+    double speed = sms.speedMetersPerSecond*reverse;    
     return new SwerveModuleState(
         speed, new Rotation2d(optimizedAngle));
 }

@@ -1,6 +1,7 @@
 package frc.robot.subsystems;
 
 import edu.wpi.first.wpilibj.Joystick;
+import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 import edu.wpi.first.wpilibj2.command.button.JoystickButton;
 import edu.wpi.first.wpilibj2.command.button.POVButton;
@@ -28,6 +29,9 @@ public class Stick extends SubsystemBase {
     double direction = joy0.getDirectionDegrees();
     double mag=joy0.getMagnitude();
     double omega = joy0.getRawAxis(4);
+    SmartDashboard.putNumber("omega from stick A", joy0.getRawAxis(4));
+    SmartDashboard.putNumber("omega from stick B", omega);
+
     // deadband
     if (Math.abs(mag)<0.02) mag=0;
     if (Math.abs(omega)<0.02) omega=0;

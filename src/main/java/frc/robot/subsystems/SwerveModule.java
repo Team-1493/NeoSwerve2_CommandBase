@@ -27,20 +27,49 @@ public class SwerveModule {
     double angleOffsetDeg, angleOffsetRev;     
     double driveSet=0,turnSet=0;
     int reverse=1; double speedPrev=0;
+    double zeroAngle;
+    double[] zeroAngleArray={100.0, -3, 80.0, 73};
+    int EncID;
+
     static double  
             kPturn=3.6/64,
             kDturn=0,
             kPdrive=0.00005,
             kFdrive=0.000175;
 
-    SwerveModule(String _name, int driveID, int turnID, int EncID, double zeroAngle){
+    SwerveModule(String _name, int driveID, int turnID){
         name=_name;
+        if(_name.equals("FR")){
+            EncID=0;
+            zeroAngle=zeroAngleArray[0];
+        }
+
+        if(_name.equals("FL")){
+            EncID=2;
+            zeroAngle=zeroAngleArray[1];
+        }
+
+        if(_name.equals("BR")){
+            EncID=1;
+            zeroAngle=zeroAngleArray[2];
+        }
+
+        if(_name.equals("BL")){
+            EncID=3;
+            zeroAngle=zeroAngleArray[3];
+        }
+
+
+
 
         driveMotor = new CANSparkMax(driveID, MotorType.kBrushless);
         driveMotor.restoreFactoryDefaults();
-        driveMotor.setIdleMode(IdleMode.kBrake);
+        driveMotor.setIdleMode(IdleMode.kCoast);
         if(_name.equals("FR")) driveMotor.setInverted(false);
-        else driveMotor.setInverted(true);
+        if(_name.equals("FL")) driveMotor.setInverted(false);
+        if(_name.equals("BL")) driveMotor.setInverted(true);
+        if(_name.equals("BR")) driveMotor.setInverted(true);
+
         driveEnc=driveMotor.getEncoder();
         driveController = driveMotor.getPIDController();
         driveController.setFF(kFdrive);
@@ -79,11 +108,15 @@ public double getAbsAngleRad(){
         return Math.PI-absEncConversionRad*absEncoder.getPeriod();
     }
 
-// gets the turn module relative angle in rotations    
+// gets the turn module relative angle in radians   
 public double getTurnPosition_Rad(){
     return turnEnc.getPosition()*2*Math.PI;
 }
 
+// gets the turn module relative angle in radians   
+public double getRelRot(){
+    return turnEnc.getPosition();
+}
 
 // gets the drive module distance in rotations    
 public double getDriveVelocity(){
@@ -102,7 +135,8 @@ public void setMotors(double speed, double turnAngle){
 
     double acc = (speed-speedPrev)/0.020;
     speedPrev=speed;
-    driveController.setReference(speed*MPSToRPM, ControlType.kVelocity);    
+    driveController.setReference(speed*MPSToRPM, ControlType.kVelocity);  
+    SmartDashboard.putNumber("turn Angle in sdm", turnAngle/twoPi);  
     turnController.setReference(turnAngle/twoPi, ControlType.kPosition);    
 
     SmartDashboard.putNumber(name+" rev", reverse);
